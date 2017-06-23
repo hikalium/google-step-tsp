@@ -107,8 +107,8 @@
       this.$.tsp.draw();
     }
     draw () {
-      this.$.tsp.inputfile = '../input_' + this.$.challenges.selected + '.csv';
-      this.$.tsp.solutionfile = '../solution_' + this.$.solvers.selected + '_' + this.$.challenges.selected + '.csv';
+      this.$.tsp.inputfile = '../input/input_' + this.$.challenges.selected + '.csv';
+      this.$.tsp.solutionfile = '../solution/solution_' + this.$.solvers.selected + '_' + this.$.challenges.selected + '.csv';
       if (this.webComponentsReady) {
         this.$.tsp.draw();
       }
