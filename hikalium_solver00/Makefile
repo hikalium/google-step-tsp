@@ -3,4 +3,4 @@ default:
 	make solver.bin
 
 %.bin : %.cpp Makefile
-	g++ -o $*.bin $*.cpp
+	g++ -Wall -o $*.bin $*.cpp
