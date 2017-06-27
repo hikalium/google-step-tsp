@@ -72,16 +72,34 @@ public:
 class Node : public Vector2D
 {
 public:
-	int index, flg;
+	int index, path_index;
+	double distance_to_path;
+	bool used;
+	Node(){
+		used = false;
+	}
 };
 
 class NodePair
 {
 public:
 	Node *p, *q;
+	NodePair()
+	{
+		NodePair(nullptr, nullptr);
+	}
+	NodePair(Node *p, Node *q)
+	{
+		this->p = p;
+		this->q = q;
+	}
 	double calcDistance()
 	{
 		return p->calcDistanceTo(q);
+	}
+	double calcDistanceFromThisLineSegment(Node *point)
+	{
+		return point->calcDistanceFromLineSegmentPQ(p, q);
 	}
 	void print()
 	{	
@@ -95,15 +113,19 @@ public:
 class NodeList
 {
 private:
-	Node *list;
 	int size;
 	int max_size;
 public:
+	Node *list;
 	NodeList(int max)
 	{
 		list = new Node[max];
 		max_size = max;
 		size = 0;
+	}
+	int getSize()
+	{
+		return size;
 	}
 	int append(double x, double y)
 	{
@@ -141,30 +163,83 @@ public:
 class Path
 {
 private:
-	int *list;
+	Node **list;
 	int size;
 	int max_size;
 public:
 	Path(int max)
 	{
-		list = new int[max];
+		list = new Node *[max];
 		max_size = max;
 		size = 0;
 	}
-	int append(int nodeIndex)
+	int getSize()
 	{
-		if(size >= max_size) return 1;
-		list[size] = nodeIndex;
+		return size;
+	}
+	void append(Node *node)
+	{
+		assert(!node->used);
+		assert(size < max_size);
+		list[size] = node;
 		size++;
-		return 0;
+		node->used = true;
+	}
+	Node *findAndAppendNextNode(NodeList *list)
+	{
+		assert(list);
+		Node *bestNode = nullptr;
+		for(int i = 0; i < list->getSize(); i++){
+			Node *node = &list->list[i];
+			assert(node);
+			if(node->used) continue;
+			node->path_index = -1;
+			node->distance_to_path = std::numeric_limits<double>::max();
+			for(int k = 0; k < size; k++){
+				NodePair pair = getNodePairOfPath(k);
+				double distance = pair.calcDistanceFromThisLineSegment(node);
+				if(distance < node->distance_to_path){
+					node->distance_to_path = distance;
+					node->path_index = k;
+				}
+			}
+		}
+		for(int i = 0; i < list->getSize(); i++){
+			Node *node = &list->list[i];
+			if(node->used) continue;
+			if(!bestNode || bestNode->distance_to_path > node->distance_to_path){
+				bestNode = node;
+			}
+		}
+		if(bestNode){
+			appendNodeBetweenPath(bestNode);
+		}
+		return bestNode;
+	}
+	void appendNodeBetweenPath(Node *node){
+		assert(node);
+		assert(size < max_size);
+		for(int i = size; i > node->path_index; i--){
+			list[i] = list[i - 1];
+		}
+		list[node->path_index] = node;
+		node->used = true;
+		size++;
+	}
+	NodePair getNodePairOfPath(int index)
+	{
+		assert(0 <= index && index < size);
+		return NodePair(list[index], list[(size + index - 1) % size]);
 	}
 	void saveSolution(std::string filename)
 	{
 		std::ofstream ofs;
 		ofs.open(filename, std::ios::out);
 		ofs << "index" << std::endl;
+		std::cout << "index" << std::endl;
 		for(int i = 0; i < size; i++){
-			ofs << list[i] << std::endl;
+			ofs << list[i]->index << std::endl;
+			std::cout << list[i]->index << std::endl;
 		}
 	}
 };
@@ -233,6 +308,8 @@ void TestVector2D()
 	q.set(0, 2);
 	t.set(4, -2);
 	assert(t.calcDistanceFromLineSegmentPQ(&p, &q) - sqrt(2) < 1e6);
+	
+	std::cout << __FUNCTION__ << ": Test passed." << std::endl;
 }
 
 int main(int argc, char *argv[])
@@ -269,8 +346,11 @@ int main(int argc, char *argv[])
 	nodeList.printAll();
 	NodePair pair = nodeList.getMostDistantPair();
 	pair.print();
-	path.append(pair.p->index);
-	path.append(pair.q->index);
+	path.append(pair.p);
+	path.append(pair.q);
+	while(path.getSize() < nodeList.getSize()){
+		path.findAndAppendNextNode(&nodeList);
+	}
 	path.saveSolution(argv[2]);
 	return 0;
 }
