@@ -174,18 +174,6 @@ public:
 		}
 		return maxPair;
 	}
-	/*
-	NodeList getNodeListWithoutNode(NodeList *nodeList, Node *node)
-	{
-		NodeList *newList = new NodeList(nodeList->getSize() - 1);
-		for(int i = 0; i < nodeList->getSize(); i++){
-			if(nodeList->list[i] != node){
-				newList.append(nodeList->list[i]);
-			}
-		}
-		return NodeList;
-	}
-	*/
 	int readFromFile(const char *filename)
 	{
 		FILE *fp;
@@ -215,23 +203,52 @@ class NodeIndexList
 private:
 	NodeList *base_list;
 	int *list;
-	int max_size;
 	int size;
 public:
-	NodeIndexList(NodeList *base_list, int max_size)
+	int max_size;
+	NodeIndexList(NodeList *base_list, int size)
 	{
 		assert(base_list);
 		this->base_list = base_list;
+		max_size = size;
 		list = new int[max_size];
-		this->max_size = max_size;
+		max_size = size;
+		this->size = 0;
+	}
+	int getSize()
+	{
+		return size;
+	}
+	Node *getNode(int index)
+	{
+		return this->base_list->getNode(list[index]);
+	}
+	NodeList *getBaseList()
+	{
+		return base_list;
+	}
+	NodeIndexList(NodeIndexList *base_list, int size)
+	{
+		assert(base_list && base_list->base_list);
+		this->base_list = base_list->base_list;
+		max_size = size;
+		list = new int[max_size];
 		this->size = 0;
 	}
 	int append(int index)
 	{
-		if(size >= max_size) return 1;
+		assert(size < max_size);
 		list[size] = index;
 		size++;
 		return 0;
+	}
+	int pop()
+	{
+		assert(size > 0);
+		size--;
+		int index = list[size];
+		list[size] = 0;
+		return index;
 	}
 	void appendAll(NodeList *base_list)
 	{
@@ -242,46 +259,167 @@ public:
 			list[i] = base_list->getNode(i)->index;	
 		}
 	}
+	void appendAll(NodeIndexList *base_list)
+	{
+		assert(base_list->getSize() <= max_size);
+		this->base_list = base_list->base_list;
+		size = base_list->getSize();
+		for(int i = 0; i < size; i++){
+			list[i] = base_list->list[i];	
+		}
+	}
 	void printAll()
 	{
 		for(int i = 0; i < size; i++){
 			base_list->getNode(list[i])->print();
 		}
 	}
+	bool hasIndex(int index)
+	{
+		for(int i = 0; i < size; i++){
+			if(list[i] == index) return true;
+		}
+		return false;
+	}
+	double getLastTwoDistance()
+	{
+		assert(size >= 2);
+		NodePair pair(getNode(size - 1), getNode(size - 2));
+		return pair.calcDistance();
+	}
+	double getDistanceBetweenFirstAndLast()
+	{
+		assert(size >= 2);
+		NodePair pair(getNode(size - 1), getNode(0));
+		return pair.calcDistance();
+	}
+	void saveSolution(std::string filename)
+	{
+		std::ofstream ofs;
+		ofs.open(filename, std::ios::out);
+		ofs << "index" << std::endl;
+		std::cout << "index" << std::endl;
+		for(int i = 0; i < size; i++){
+			ofs << list[i] << std::endl;
+			//std::cout << list[i]->index << std::endl;
+		}
+		std::cout << "solution saved to " << filename << std::endl;
+	}
 };
 
-
-/*
 class BruteForceSolver
 {
+	// 16 -> 61s
+	// 8 -> 0.1s 
 	public:
-	Path *path;
+	NodeIndexList *base_list;
 	double bestPathLen;
-	int *bestPath;
-	BruteForceSolver(NodeList *list)
+	NodeIndexList *best_list;
+	//static const int updateLimit = 10;
+	//int updateCount;
+	BruteForceSolver(NodeIndexList *list)
 	{
 		assert(list);
-		path = new Path(list->getSize());
-		bestPath = new int[list->getSize()];
+		base_list = list;
 	}
 	double solve()
 	{
 		bestPathLen = std::numeric_limits<double>::max();
-		solveSub(0);
+		NodeIndexList *usedList;
+		usedList = new NodeIndexList(base_list, base_list->getSize());
+		usedList->append(0);
+		//updateCount = 0;
+		return solveSub(usedList, 0);
 	}
-	double solveSub(double prevPathLen)
+	double solveSub(NodeIndexList *usedList, double prevPathLen)
 	{
-		if(!path.canAppend()){
-			if(prevPathLen < bestPathLen){
+		//if(updateCount >= updateLimit) return 0;
+		if(prevPathLen > bestPathLen) return 0;
+		if(usedList->getSize() >= base_list->getSize()){
+			prevPathLen += usedList->getDistanceBetweenFirstAndLast();
+			if(bestPathLen > prevPathLen){
 				bestPathLen = prevPathLen;
-				for(int i = 0; i < list->getSize(); i++){
-					
-				}
+				best_list = new NodeIndexList(usedList, usedList->getSize());
+				best_list->appendAll(usedList);
+				//
+				std::cout << "---- " << prevPathLen << std::endl;
+				//best_list->printAll();
+				//updateCount++;
 			}
-			return;
+			return 0;
 		}
+		for(int i = 0; i < base_list->getSize(); i++){
+			int index = base_list->getNode(i)->index;
+			if(usedList->hasIndex(i)) continue;
+			usedList->append(index);
+			double newPathLen = prevPathLen + usedList->getLastTwoDistance();
+			solveSub(usedList, newPathLen);
+			usedList->pop();
+		}
+		return 0;
 	}
-}
+	void saveSolution(std::string filename)
+	{
+		assert(best_list);
+		best_list->saveSolution(filename);
+	}
+};
+/*
+class RoughSolver
+{
+	public:
+	NodeIndexList *base_list;
+	double bestPathLen;
+	NodeIndexList *best_list;
+	static const int updateLimit = 10;
+	int updateCount;
+	BruteForceSolver(NodeIndexList *list)
+	{
+		assert(list);
+		base_list = list;
+	}
+	double solve()
+	{
+		bestPathLen = std::numeric_limits<double>::max();
+		NodeIndexList *usedList;
+		usedList = new NodeIndexList(base_list, base_list->getSize());
+		usedList->append(0);
+		updateCount = 0;
+		return solveSub(usedList, 0);
+	}
+	double solveSub(NodeIndexList *usedList, double prevPathLen)
+	{
+		if(updateCount >= updateLimit) return 0;
+		if(prevPathLen > bestPathLen) return 0;
+		if(usedList->getSize() >= base_list->getSize()){
+			prevPathLen += usedList->getDistanceBetweenFirstAndLast();
+			if(bestPathLen > prevPathLen){
+				bestPathLen = prevPathLen;
+				best_list = new NodeIndexList(usedList, usedList->getSize());
+				best_list->appendAll(usedList);
+				//
+				std::cout << "---- " << prevPathLen << std::endl;
+				//best_list->printAll();
+				updateCount++;
+			}
+			return 0;
+		}
+		for(int i = 0; i < base_list->getSize(); i++){
+			int index = base_list->getNode(i)->index;
+			if(usedList->hasIndex(i)) continue;
+			usedList->append(index);
+			double newPathLen = prevPathLen + usedList->getLastTwoDistance();
+			solveSub(usedList, newPathLen);
+			usedList->pop();
+		}
+		return 0;
+	}
+	void saveSolution(std::string filename)
+	{
+		assert(best_list);
+		best_list->saveSolution(filename);
+	}
+};
 */
 class Path
 {
@@ -379,37 +517,6 @@ public:
 	}
 };
 
-/*
-int solveByBruteForce()
-{
-	int min_cost = 
-}
-*/
-/*
-void solveRough()
-{
-	min_cost = 0;
-	min_route[0] = 0;
-	for(int i = 1; i < num_of_nodes; i++){
-		min_route[i] = i;
-		min_cost += calcDistance(&node_list[i - 1], &node_list[i]);
-	}
-	min_cost += calcDistance(&node_list[0], &node_list[num_of_nodes - 1]);
-	std::cout << "solveRough: cost = " << min_cost << std::endl;
-}
-*/
-/*
-void saveSolution(std::string filename)
-{
-	std::ofstream ofs;
-	ofs.open(filename, std::ios::out);
-	ofs << "index" << std::endl;
-	for(int i = 0; i < num_of_nodes; i++){
-		ofs << min_route[i] << std::endl;
-	}
-}
-*/
-
 void TestVector2D()
 {
 	Vector2D p, q, t;
@@ -458,14 +565,28 @@ int main(int argc, char *argv[])
 	//
 	NodeList nodeList(MAX_NODE_SIZE);
 	nodeList.readFromFile(argv[1]);
+	//
+	NodeIndexList nodeIndexList(&nodeList, nodeList.getSize());
+	nodeIndexList.appendAll(&nodeList);
+	//
+	/*
 	Path path(MAX_NODE_SIZE);
 	NodePair pair = nodeList.getMostDistantPair();
 	pair.print();
 	path.append(pair.p);
 	path.append(pair.q);
 	while(path.getSize() < nodeList.getSize()){
+		std::cout << path.getSize() << std::endl;
 		path.findAndAppendNextNode(&nodeList);
 	}
 	path.saveSolution(argv[2]);
+	//
+	*/
+	BruteForceSolver bSolver(&nodeIndexList);
+	bSolver.solve();
+	bSolver.saveSolution(argv[2]);
+	//
+	
+	
 	return 0;
 }
