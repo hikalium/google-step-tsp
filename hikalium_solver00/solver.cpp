@@ -5,8 +5,9 @@
 #include <algorithm>
 #include <math.h>
 #include <assert.h>
+#include <stdio.h>
 
-#define MAX_NODE_SIZE	3000
+#define MAX_NODE_SIZE	(1 << 22)
 
 class Vector2D
 {
@@ -120,6 +121,7 @@ public:
 	NodeList(int max)
 	{
 		list = new Node[max];
+		assert(list);
 		max_size = max;
 		size = 0;
 	}
@@ -127,12 +129,26 @@ public:
 	{
 		return size;
 	}
+	Node *getNode(int index)
+	{
+		assert(0 <= index && index < size);
+		return &list[index];
+	}
 	int append(double x, double y)
 	{
 		if(size >= max_size) return 1;
 		list[size].x = x;
 		list[size].y = y;
 		list[size].index = size;
+		size++;
+		return 0;
+	}
+	int append(Node *node)
+	{
+		if(size >= max_size) return 1;
+		list[size].x = node->x;
+		list[size].y = node->y;
+		list[size].index = node->index;
 		size++;
 		return 0;
 	}
@@ -158,8 +174,115 @@ public:
 		}
 		return maxPair;
 	}
+	/*
+	NodeList getNodeListWithoutNode(NodeList *nodeList, Node *node)
+	{
+		NodeList *newList = new NodeList(nodeList->getSize() - 1);
+		for(int i = 0; i < nodeList->getSize(); i++){
+			if(nodeList->list[i] != node){
+				newList.append(nodeList->list[i]);
+			}
+		}
+		return NodeList;
+	}
+	*/
+	int readFromFile(const char *filename)
+	{
+		FILE *fp;
+		fp = fopen(filename, "rb");
+		if(!fp){
+			std::cout << "input file not found." << std::endl;
+			return 0;
+		}
+		char buf[128];
+		fgets(buf, sizeof(buf), fp);	// skip first line
+		double x, y;
+		try{
+			while(!feof(fp)){
+				if(fscanf(fp, "%lf,%lf", &x, &y) != 2) break;
+				append(x, y);
+			}
+		} catch(std::invalid_argument){
+		}
+		// printAll();
+		std::cout << "read " << size << " nodes" << std::endl;
+		return size;
+	}
 };
 
+class NodeIndexList
+{
+private:
+	NodeList *base_list;
+	int *list;
+	int max_size;
+	int size;
+public:
+	NodeIndexList(NodeList *base_list, int max_size)
+	{
+		assert(base_list);
+		this->base_list = base_list;
+		list = new int[max_size];
+		this->max_size = max_size;
+		this->size = 0;
+	}
+	int append(int index)
+	{
+		if(size >= max_size) return 1;
+		list[size] = index;
+		size++;
+		return 0;
+	}
+	void appendAll(NodeList *base_list)
+	{
+		assert(base_list->getSize() <= max_size);
+		this->base_list = base_list;
+		size = base_list->getSize();
+		for(int i = 0; i < size; i++){
+			list[i] = base_list->getNode(i)->index;	
+		}
+	}
+	void printAll()
+	{
+		for(int i = 0; i < size; i++){
+			base_list->getNode(list[i])->print();
+		}
+	}
+};
+
+
+/*
+class BruteForceSolver
+{
+	public:
+	Path *path;
+	double bestPathLen;
+	int *bestPath;
+	BruteForceSolver(NodeList *list)
+	{
+		assert(list);
+		path = new Path(list->getSize());
+		bestPath = new int[list->getSize()];
+	}
+	double solve()
+	{
+		bestPathLen = std::numeric_limits<double>::max();
+		solveSub(0);
+	}
+	double solveSub(double prevPathLen)
+	{
+		if(!path.canAppend()){
+			if(prevPathLen < bestPathLen){
+				bestPathLen = prevPathLen;
+				for(int i = 0; i < list->getSize(); i++){
+					
+				}
+			}
+			return;
+		}
+	}
+}
+*/
 class Path
 {
 private:
@@ -177,13 +300,25 @@ public:
 	{
 		return size;
 	}
+	bool canAppend()
+	{
+		return size < max_size;
+	}
 	void append(Node *node)
 	{
 		assert(!node->used);
-		assert(size < max_size);
+		assert(canAppend());
 		list[size] = node;
 		size++;
 		node->used = true;
+	}
+	Node *pop()
+	{
+		assert(size > 0);
+		size--;
+		Node *node = list[size];
+		list[size] = nullptr;
+		return node;
 	}
 	Node *findAndAppendNextNode(NodeList *list)
 	{
@@ -239,7 +374,7 @@ public:
 		std::cout << "index" << std::endl;
 		for(int i = 0; i < size; i++){
 			ofs << list[i]->index << std::endl;
-			std::cout << list[i]->index << std::endl;
+			//std::cout << list[i]->index << std::endl;
 		}
 	}
 };
@@ -320,30 +455,10 @@ int main(int argc, char *argv[])
 		std::cout << "usage: solver <input.csv> <output.csv>" << std::endl;
 		return 1;
 	}
-	ifs.open(argv[1]);
-	if(!ifs){
-		std::cout << "input file not found." << std::endl;
-		return 1;
-	}
-
+	//
 	NodeList nodeList(MAX_NODE_SIZE);
+	nodeList.readFromFile(argv[1]);
 	Path path(MAX_NODE_SIZE);
-	std::string line;
-	std::getline(ifs, line);	// skip first line
-	while(!ifs.eof()){
-		std::string token;
-		std::getline(ifs, line);
-		std::istringstream stream(line);
-		std::string xStr, yStr;
-		getline(stream, xStr,',');
-		getline(stream, yStr,',');
-		try{
-			nodeList.append(std::stod(xStr), std::stod(yStr));
-		} catch(std::invalid_argument){
-			break;
-		}
-	}
-	nodeList.printAll();
 	NodePair pair = nodeList.getMostDistantPair();
 	pair.print();
 	path.append(pair.p);
