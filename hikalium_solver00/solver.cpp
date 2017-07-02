@@ -72,12 +72,18 @@ public:
 
 class Node : public Vector2D
 {
+	typedef Vector2D base;
 public:
-	int index, path_index;
-	double distance_to_path;
-	bool used;
+	int index/*, path_index*/;
+	/*double distance_to_path;
+	bool used;*/
 	Node(){
-		used = false;
+		/*used = false;*/
+	}
+	void print()
+	{	
+		std::cout << index << "\t";
+		base::print();
 	}
 };
 
@@ -215,6 +221,14 @@ public:
 		max_size = size;
 		this->size = 0;
 	}
+	NodeIndexList(NodeIndexList *base_list, int size)
+	{
+		assert(base_list && base_list->base_list);
+		this->base_list = base_list->base_list;
+		max_size = size;
+		list = new int[max_size];
+		this->size = 0;
+	}
 	int getSize()
 	{
 		return size;
@@ -226,14 +240,6 @@ public:
 	NodeList *getBaseList()
 	{
 		return base_list;
-	}
-	NodeIndexList(NodeIndexList *base_list, int size)
-	{
-		assert(base_list && base_list->base_list);
-		this->base_list = base_list->base_list;
-		max_size = size;
-		list = new int[max_size];
-		this->size = 0;
 	}
 	int append(int index)
 	{
@@ -272,6 +278,13 @@ public:
 	{
 		for(int i = 0; i < size; i++){
 			base_list->getNode(list[i])->print();
+		}
+	}
+	void dumpAllIndex(std::ofstream *ofs)
+	{
+		for(int i = 0; i < size; i++){
+			*ofs << list[i] << std::endl;
+			std::cout << list[i] << std::endl;
 		}
 	}
 	bool hasIndex(int index)
@@ -327,7 +340,7 @@ class BruteForceSolver
 		bestPathLen = std::numeric_limits<double>::max();
 		NodeIndexList *usedList;
 		usedList = new NodeIndexList(base_list, base_list->getSize());
-		usedList->append(0);
+		usedList->append(base_list->getNode(0)->index);
 		//updateCount = 0;
 		return solveSub(usedList, 0);
 	}
@@ -350,7 +363,7 @@ class BruteForceSolver
 		}
 		for(int i = 0; i < base_list->getSize(); i++){
 			int index = base_list->getNode(i)->index;
-			if(usedList->hasIndex(i)) continue;
+			if(usedList->hasIndex(index)) continue;
 			usedList->append(index);
 			double newPathLen = prevPathLen + usedList->getLastTwoDistance();
 			solveSub(usedList, newPathLen);
@@ -363,7 +376,152 @@ class BruteForceSolver
 		assert(best_list);
 		best_list->saveSolution(filename);
 	}
+	void dumpSolution(std::ofstream *ofs)
+	{
+		assert(best_list);
+		assert(ofs);
+		best_list->dumpAllIndex(ofs);
+	}
 };
+
+class DivideSolver
+{
+	NodeIndexList *base_list;
+	int *clustor_id_list;
+	//static const int clustor_size = 16;
+	Vector2D *clustor_center;
+	static const int num_of_clustors = 2;
+	static const int brute_force_capacity = 10;
+	DivideSolver **childCluster;
+	bool isLeaf;
+	int clustorID;
+	static int generateCount;
+public:
+	DivideSolver(NodeIndexList *list)
+	{
+		assert(list);
+		base_list = list;
+		clustor_id_list = new int[base_list->getSize()];
+		//
+		//std::cout << "DivideSolver(size: " << base_list->getSize() << std::endl;
+		isLeaf = base_list->getSize() <= brute_force_capacity;
+		if(!isLeaf){
+			clustering();
+		}
+		clustorID = DivideSolver::generateCount++;
+	}
+	void clustering()
+	{
+		//num_of_clustors = (base_list->getSize() + clustor_size - 1) / clustor_size;
+		for(int i = 0; i < base_list->getSize(); i++){
+			clustor_id_list[i] = i % num_of_clustors;
+		}
+		clustor_center = new Vector2D[num_of_clustors];
+		do {
+			updateClusterCenter();
+		} while(updateCluster());
+		//dumpClustor();
+		genChildClustor();
+	}
+	void updateClusterCenter()
+	{
+		for(int k = 0; k < num_of_clustors; k++){
+			clustor_center[k] = getClusterCenter(k);
+			//std::cout << "cluster center " << k << " ";
+			//clustor_center[k].print();
+		}
+		//std::cout << "-----------" << std::endl;
+	}
+	int updateCluster()
+	{
+		int updateCount = 0;
+		int nearest_cluster_id;
+		double nearest_distance;
+		for(int i = 0; i < base_list->getSize(); i++){
+			nearest_cluster_id = 0;
+			Node *n = base_list->getNode(i);
+			nearest_distance = 
+				n->calcDistanceTo(&clustor_center[0]);
+			for(int k = 1; k < num_of_clustors; k++){
+				double distance = n->calcDistanceTo(&clustor_center[k]);
+				if(distance < nearest_distance){
+					nearest_distance = distance;
+					nearest_cluster_id = k;
+				}
+			}
+			if(clustor_id_list[i] != nearest_cluster_id){
+				updateCount++;
+				clustor_id_list[i] = nearest_cluster_id;
+			}
+		}
+		return updateCount;
+	}
+
+	Vector2D getClusterCenter(int cluster_id)
+	{
+		Vector2D center;
+		center.x = 0;
+		center.y = 0;
+		int count = 0;
+		for(int i = 0; i < base_list->getSize(); i++){
+			if(clustor_id_list[i] == cluster_id){
+				count++;
+				center.x += base_list->getNode(i)->x;
+				center.y += base_list->getNode(i)->y;
+			}
+		}
+		if(count == 0){
+			return clustor_center[cluster_id];
+		}
+		center.x /= count;
+		center.y /= count;
+		return center;
+	}
+
+	void dumpClustor()
+	{
+		dumpClustor(0);
+	}
+	void dumpClustor(int indentDepth){
+		if(isLeaf){
+			std::cout << "---- Clustor " << clustorID << " ----";
+			base_list->printAll();
+			return;
+		}
+		for(int k = 0; k < num_of_clustors; k++){
+			childCluster[k]->dumpClustor(indentDepth + 1);
+		}	
+	}
+	void dumpSolution(std::ofstream *ofs)
+	{
+		if(isLeaf){
+			BruteForceSolver bSolver(base_list);
+			bSolver.solve();
+			bSolver.dumpSolution(ofs);
+			return;
+		}
+		for(int k = 0; k < num_of_clustors; k++){
+			childCluster[k]->dumpSolution(ofs);
+		}	
+	}
+	void genChildClustor()
+	{
+		childCluster = new DivideSolver *[num_of_clustors];
+		
+		NodeIndexList *nodeIndexList;
+		for(int k = 0; k < num_of_clustors; k++){
+			nodeIndexList = new NodeIndexList(base_list, base_list->getSize());
+			
+			for(int i = 0; i < base_list->getSize(); i++){
+				if(clustor_id_list[i] == k){
+					nodeIndexList->append(this->base_list->getNode(i)->index);
+				}
+			}
+			childCluster[k] = new DivideSolver(nodeIndexList);
+		}
+	}
+};
+int DivideSolver::generateCount;
 /*
 class RoughSolver
 {
@@ -421,6 +579,7 @@ class RoughSolver
 	}
 };
 */
+/*
 class Path
 {
 private:
@@ -458,6 +617,7 @@ public:
 		list[size] = nullptr;
 		return node;
 	}
+	
 	Node *findAndAppendNextNode(NodeList *list)
 	{
 		assert(list);
@@ -516,7 +676,7 @@ public:
 		}
 	}
 };
-
+*/
 void TestVector2D()
 {
 	Vector2D p, q, t;
@@ -582,9 +742,20 @@ int main(int argc, char *argv[])
 	path.saveSolution(argv[2]);
 	//
 	*/
+	//
+	DivideSolver dSolver(&nodeIndexList);
+	dSolver.dumpClustor();
+	std::ofstream ofs;
+	ofs.open(argv[2], std::ios::out);
+	ofs << "index" << std::endl;
+	dSolver.dumpSolution(&ofs);
+	//dSolver.clustering();
+	//
+	/*
 	BruteForceSolver bSolver(&nodeIndexList);
 	bSolver.solve();
 	bSolver.saveSolution(argv[2]);
+	*/
 	//
 	
 	
