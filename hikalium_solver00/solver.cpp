@@ -341,12 +341,12 @@ class BruteForceSolver
 		NodeIndexList *usedList;
 		usedList = new NodeIndexList(base_list, base_list->getSize());
 		usedList->append(base_list->getNode(0)->index);
-		//updateCount = 0;
-		return solveSub(usedList, 0);
+		solveSub(usedList, 0);
+		std::cout << "best: " << bestPathLen << std::endl;
+		return bestPathLen;
 	}
 	double solveSub(NodeIndexList *usedList, double prevPathLen)
 	{
-		//if(updateCount >= updateLimit) return 0;
 		if(prevPathLen > bestPathLen) return 0;
 		if(usedList->getSize() >= base_list->getSize()){
 			prevPathLen += usedList->getDistanceBetweenFirstAndLast();
@@ -354,10 +354,6 @@ class BruteForceSolver
 				bestPathLen = prevPathLen;
 				best_list = new NodeIndexList(usedList, usedList->getSize());
 				best_list->appendAll(usedList);
-				//
-				std::cout << "---- " << prevPathLen << std::endl;
-				//best_list->printAll();
-				//updateCount++;
 			}
 			return 0;
 		}
@@ -484,7 +480,7 @@ public:
 	}
 	void dumpClustor(int indentDepth){
 		if(isLeaf){
-			std::cout << "---- Clustor " << clustorID << " ----";
+			std::cout << "---- Clustor " << clustorID << " ----" << std::endl;
 			base_list->printAll();
 			return;
 		}
@@ -717,6 +713,7 @@ void TestVector2D()
 int main(int argc, char *argv[])
 {
 	TestVector2D();
+	//
 	std::ifstream ifs;
 	if(argc < 3){
 		std::cout << "usage: solver <input.csv> <output.csv>" << std::endl;
@@ -729,35 +726,12 @@ int main(int argc, char *argv[])
 	NodeIndexList nodeIndexList(&nodeList, nodeList.getSize());
 	nodeIndexList.appendAll(&nodeList);
 	//
-	/*
-	Path path(MAX_NODE_SIZE);
-	NodePair pair = nodeList.getMostDistantPair();
-	pair.print();
-	path.append(pair.p);
-	path.append(pair.q);
-	while(path.getSize() < nodeList.getSize()){
-		std::cout << path.getSize() << std::endl;
-		path.findAndAppendNextNode(&nodeList);
-	}
-	path.saveSolution(argv[2]);
-	//
-	*/
-	//
 	DivideSolver dSolver(&nodeIndexList);
 	dSolver.dumpClustor();
 	std::ofstream ofs;
 	ofs.open(argv[2], std::ios::out);
 	ofs << "index" << std::endl;
 	dSolver.dumpSolution(&ofs);
-	//dSolver.clustering();
 	//
-	/*
-	BruteForceSolver bSolver(&nodeIndexList);
-	bSolver.solve();
-	bSolver.saveSolution(argv[2]);
-	*/
-	//
-	
-	
 	return 0;
 }
